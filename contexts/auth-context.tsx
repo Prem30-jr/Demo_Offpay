@@ -49,6 +49,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         const errorData = await response.json()
         console.error("Failed to save user to database:", response.status, errorData)
+        
+        // Log more details for debugging
+        if (errorData.details) {
+          console.error("Error details:", errorData.details)
+        }
       }
     } catch (error) {
       console.error("Error saving user to database:", error)
