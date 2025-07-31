@@ -8,17 +8,31 @@ export async function POST(request: NextRequest) {
     console.log("MPIN API called:", { firebaseUid, action, mpinLength: mpin?.length })
 
     if (!firebaseUid || !mpin || !action) {
+      console.error("Missing required fields:", { firebaseUid: !!firebaseUid, mpin: !!mpin, action: !!action })
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       )
     }
 
+    console.log("Connecting to database...")
     const { db } = await connectToDatabase()
     const usersCollection = db.collection("users")
 
+    console.log("Checking if user exists in database...")
+    const existingUser = await usersCollection.findOne({ firebaseUid })
+    console.log("User exists:", !!existingUser)
+
     if (action === "setup") {
       // Set up MPIN for the first time
+      if (!existingUser) {
+        console.error("User not found in database for MPIN setup:", firebaseUid)
+        return NextResponse.json(
+          { error: "User not found. Please try signing in again." },
+          { status: 404 }
+        )
+      }
+
       const result = await usersCollection.findOneAndUpdate(
         { firebaseUid },
         {
@@ -32,9 +46,10 @@ export async function POST(request: NextRequest) {
       )
 
       if (!result.value) {
+        console.error("Failed to update user with MPIN:", firebaseUid)
         return NextResponse.json(
-          { error: "User not found" },
-          { status: 404 }
+          { error: "Failed to set MPIN. Please try again." },
+          { status: 500 }
         )
       }
 
@@ -47,16 +62,16 @@ export async function POST(request: NextRequest) {
 
     } else if (action === "verify") {
       // Verify MPIN
-      const user = await usersCollection.findOne({ firebaseUid })
-
-      if (!user) {
+      if (!existingUser) {
+        console.error("User not found in database for MPIN verification:", firebaseUid)
         return NextResponse.json(
           { error: "User not found" },
           { status: 404 }
         )
       }
 
-      if (user.mpinStatus !== "Set") {
+      if (existingUser.mpinStatus !== "Set") {
+        console.error("MPIN not set for user:", firebaseUid)
         return NextResponse.json(
           { error: "MPIN not set" },
           { status: 400 }
@@ -65,11 +80,11 @@ export async function POST(request: NextRequest) {
 
       console.log("Verifying MPIN:", { 
         provided: mpin, 
-        stored: user.mpin, 
-        match: user.mpin === mpin 
+        stored: existingUser.mpin, 
+        match: existingUser.mpin === mpin 
       })
 
-      if (user.mpin === mpin) {
+      if (existingUser.mpin === mpin) {
         return NextResponse.json({
           success: true,
           message: "MPIN verified successfully"
@@ -83,16 +98,16 @@ export async function POST(request: NextRequest) {
 
     } else if (action === "change") {
       // Change existing MPIN
-      const user = await usersCollection.findOne({ firebaseUid })
-
-      if (!user) {
+      if (!existingUser) {
+        console.error("User not found in database for MPIN change:", firebaseUid)
         return NextResponse.json(
           { error: "User not found" },
           { status: 404 }
         )
       }
 
-      if (user.mpinStatus !== "Set") {
+      if (existingUser.mpinStatus !== "Set") {
+        console.error("MPIN not set for user during change:", firebaseUid)
         return NextResponse.json(
           { error: "MPIN not set" },
           { status: 400 }
@@ -110,12 +125,21 @@ export async function POST(request: NextRequest) {
         { returnDocument: "after" }
       )
 
+      if (!result.value) {
+        console.error("Failed to update MPIN for user:", firebaseUid)
+        return NextResponse.json(
+          { error: "Failed to update MPIN. Please try again." },
+          { status: 500 }
+        )
+      }
+
       return NextResponse.json({
         success: true,
         message: "MPIN changed successfully"
       })
 
     } else {
+      console.error("Invalid action:", action)
       return NextResponse.json(
         { error: "Invalid action" },
         { status: 400 }

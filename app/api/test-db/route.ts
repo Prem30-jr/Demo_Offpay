@@ -3,40 +3,64 @@ import connectToDatabase from "@/lib/mongodb"
 
 export async function GET() {
   try {
-    const { db } = await connectToDatabase()
+    console.log("Testing database connection...")
     
-    // Test database connection
-    const collections = await db.listCollections().toArray()
-    const userCount = await db.collection("users").countDocuments()
+    const { db } = await connectToDatabase()
+    console.log("Database connection successful!")
+    
+    // Test collection access
+    const usersCollection = db.collection("users")
+    const userCount = await usersCollection.countDocuments()
+    
+    console.log("Database test successful. User count:", userCount)
     
     return NextResponse.json({
-      status: "Database connected successfully",
-      collections: collections.map(col => col.name),
+      success: true,
+      message: "Database connection successful",
       userCount,
       timestamp: new Date().toISOString()
     })
   } catch (error) {
     console.error("Database test failed:", error)
-    return NextResponse.json(
-      { error: "Database connection failed", details: error },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      timestamp: new Date().toISOString()
+    }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { firebaseUid, fullName, email, profilePicture } = await request.json()
+    const { firebaseUid, fullName, email } = await request.json()
+    
+    console.log("Testing user creation:", { firebaseUid, fullName, email })
     
     const { db } = await connectToDatabase()
     const usersCollection = db.collection("users")
     
-    // Test user creation
+    // Check if user exists
+    const existingUser = await usersCollection.findOne({ firebaseUid })
+    
+    if (existingUser) {
+      return NextResponse.json({
+        success: true,
+        message: "User already exists",
+        user: {
+          firebaseUid: existingUser.firebaseUid,
+          fullName: existingUser.fullName,
+          email: existingUser.email,
+          mpinStatus: existingUser.mpinStatus
+        }
+      })
+    }
+    
+    // Create test user
     const testUser = {
-      firebaseUid: firebaseUid || "test_uid_" + Date.now(),
+      firebaseUid,
       fullName: fullName || "Test User",
       email: email || "test@example.com",
-      profilePicture: profilePicture || "",
+      profilePicture: "",
       walletBalance: 0,
       mpinStatus: "Not Set",
       linkedBanks: [],
@@ -48,15 +72,17 @@ export async function POST(request: NextRequest) {
     const result = await usersCollection.insertOne(testUser)
     
     return NextResponse.json({
+      success: true,
       message: "Test user created successfully",
       insertedId: result.insertedId,
       user: testUser
     })
+    
   } catch (error) {
-    console.error("Test user creation failed:", error)
-    return NextResponse.json(
-      { error: "Test user creation failed", details: error },
-      { status: 500 }
-    )
+    console.error("User creation test failed:", error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    }, { status: 500 })
   }
 }

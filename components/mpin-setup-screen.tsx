@@ -63,6 +63,12 @@ export function MPINSetupScreen({ onBack, onComplete }: MPINSetupScreenProps) {
         try {
           console.log("Sending MPIN setup request:", { firebaseUid: user?.uid, mpin, action: "setup" })
           
+          // First, ensure user exists in database
+          if (user?.uid) {
+            console.log("Ensuring user exists in database before MPIN setup...")
+            await refreshUserData()
+          }
+          
           // Call the real API to save MPIN
           const response = await fetch("/api/mpin", {
             method: "POST",
@@ -91,7 +97,13 @@ export function MPINSetupScreen({ onBack, onComplete }: MPINSetupScreenProps) {
           } else {
             const errorData = await response.json()
             console.error("MPIN setup error:", errorData)
-            setError(errorData.error || "Failed to set MPIN. Please try again.")
+            
+            // Handle specific error cases
+            if (response.status === 404 && errorData.error?.includes("User not found")) {
+              setError("User not found. Please try signing in again.")
+            } else {
+              setError(errorData.error || "Failed to set MPIN. Please try again.")
+            }
           }
         } catch (error) {
           console.error("Error setting MPIN:", error)

@@ -27,6 +27,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to save user data to MongoDB
   const saveUserToDatabase = async (firebaseUser: User) => {
     try {
+      console.log("Saving user to database:", { uid: firebaseUser.uid, email: firebaseUser.email })
+      
       const response = await fetch("/api/users", {
         method: "POST",
         headers: {
@@ -42,9 +44,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const savedUser = await response.json()
+        console.log("User saved to database successfully:", savedUser)
         setUserData(savedUser)
       } else {
-        console.error("Failed to save user to database")
+        const errorData = await response.json()
+        console.error("Failed to save user to database:", response.status, errorData)
       }
     } catch (error) {
       console.error("Error saving user to database:", error)
@@ -54,6 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Function to fetch user data from MongoDB
   const fetchUserData = async (firebaseUid: string) => {
     try {
+      console.log("Fetching user data for:", firebaseUid)
+      
       const response = await fetch(`/api/users?firebaseUid=${firebaseUid}`)
       if (response.ok) {
         const userData = await response.json()
@@ -61,6 +67,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserData(userData)
       } else {
         console.error("Failed to fetch user data:", response.status)
+        // If user doesn't exist, try to create them
+        if (response.status === 404 && user?.uid) {
+          console.log("User not found, attempting to create...")
+          await saveUserToDatabase(user)
+        }
       }
     } catch (error) {
       console.error("Error fetching user data:", error)
